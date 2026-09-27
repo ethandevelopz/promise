@@ -61,7 +61,7 @@ end)
 readFileAsync('data.json'):andThen(print)
 ```
 
-`promise.promisify` converts a Node-style, callback-taking function `(...args, callback)` into a function that returns a Promise. The callback is invoked as `callback(err, ...results)`.
+`promise.promisify` converts a callback-taking function `(...args, callback)` into a function that returns a Promise, using the `callback(err, ...results)` convention: a non-`nil` `err` rejects, otherwise the remaining values fulfill. That convention is a choice made by this library, not a Roblox or Luau standard, so `callback` needs to actually report errors this way for rejections to work.
 
 ```lua
 promise.defer(function()
