@@ -705,6 +705,6 @@ end)
 
 ## Verification
 
-- The implementation was reviewed function-by-function against this reference; no behavior described above goes beyond what the code in `Promise.luau` actually does.
-- `Promise_spec.luau` exercises every API above, including new success, rejection, synchronous-error, multi-return, assimilation, cancellation, double-settlement, and combinator-interaction cases for each newly added API, without modifying or weakening any pre-existing test.
-- This environment does not have a Luau/Roblox runtime available to execute the test suite directly. Run `Promise_spec.luau` inside Roblox Studio (or another Luau host) against `Promise.luau` to confirm the `62 passed, 0 failed` result reported in `README.md`.
+- The implementation was reviewed function-by-function against this reference; no behavior described above goes beyond what the code in `Promise.lua` actually does.
+- `Promise.spec.lua` exercises every API above, including new success, rejection, synchronous-error, multi-return, assimilation, cancellation, double-settlement, and combinator-interaction cases for each newly added API, without modifying or weakening any pre-existing test.
+- This environment does not have a Luau/Roblox runtime available to execute the test suite directly. Run `Promise.spec.lua` inside Roblox Studio (or another Luau host) against `Promise.lua` to confirm the `62 passed, 0 failed` result reported in `README.md`.
