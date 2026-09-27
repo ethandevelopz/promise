@@ -1,4 +1,4 @@
-# Promise Library — API Reference
+# Promise Library - API Reference
 
 This is the complete API reference for the Promise library, including every public function and method, existing and newly added.
 
@@ -66,10 +66,10 @@ Creates a new Promise from an executor function.
 **Signature:** `promise.new(executor: (resolve, reject, onCancel) -> ()) -> Promise`
 
 **Parameters:**
-- `executor` — called synchronously and immediately. Receives:
-  - `resolve(...)` — fulfills the Promise with the given values. If called with a single Promise or thenable, the new Promise adopts that value's eventual outcome instead (see Promise/thenable assimilation below).
-  - `reject(...)` — rejects the Promise with the given values.
-  - `onCancel(hook)` — registers a cleanup hook, equivalent to calling `:onCancel(hook)` on the resulting Promise.
+- `executor` - called synchronously and immediately. Receives:
+  - `resolve(...)` - fulfills the Promise with the given values. If called with a single Promise or thenable, the new Promise adopts that value's eventual outcome instead (see Promise/thenable assimilation below).
+  - `reject(...)` - rejects the Promise with the given values.
+  - `onCancel(hook)` - registers a cleanup hook, equivalent to calling `:onCancel(hook)` on the resulting Promise.
 
 **Returns:** a new `Promise` in the `pending` state (unless the executor settles it synchronously).
 
@@ -116,7 +116,7 @@ Creates a Promise that is already fulfilled with the given values (or that assim
 
 **Multiple return values:** all arguments are preserved.
 
-**Promise/thenable assimilation:** same rules as `resolve` inside `promise.new` — passing a single Promise or thenable causes the result to adopt its outcome instead of wrapping it.
+**Promise/thenable assimilation:** same rules as `resolve` inside `promise.new` - passing a single Promise or thenable causes the result to adopt its outcome instead of wrapping it.
 
 ```lua
 promise.resolve(1, 2, 3):andThen(function(a, b, c)
@@ -147,8 +147,8 @@ promise.reject('not found'):catch(warn)
 **Signature:** `promise.try(callback: (...any) -> ...any, ...: any) -> Promise`
 
 **Parameters:**
-- `callback` — run synchronously via `pcall` as soon as `promise.try` is called.
-- `...` — arguments forwarded to `callback`.
+- `callback` - run synchronously via `pcall` as soon as `promise.try` is called.
+- `...` - arguments forwarded to `callback`.
 
 **Returns:** a Promise that fulfills with `callback`'s return values, or rejects with the error if `callback` throws.
 
@@ -181,11 +181,11 @@ end)
 **Signature:** `promise.promisify(callback: (...any) -> ...any) -> (...any) -> Promise`
 
 **Parameters:**
-- `callback` — a function whose *last* parameter is a completion callback. `promisify` calls it as `callback(err, ...results)`: a non-`nil` `err` is treated as a rejection reason; a `nil` `err` fulfills with the remaining values. This is a convention chosen by this library, not a Roblox or Luau standard — Roblox callback-style APIs don't consistently follow an `(err, ...)` shape, so `callback` needs to actually report errors this way (or be adapted with a small wrapper) for rejections to work.
+- `callback` - a function whose *last* parameter is a completion callback. `promisify` calls it as `callback(err, ...results)`: a non-`nil` `err` is treated as a rejection reason; a `nil` `err` fulfills with the remaining values. This is a convention chosen by this library, not a Roblox or Luau standard - Roblox callback-style APIs don't consistently follow an `(err, ...)` shape, so `callback` needs to actually report errors this way (or be adapted with a small wrapper) for rejections to work.
 
 **Returns:** a function. Calling it forwards all given arguments to `callback` (with the completion callback appended as the final argument) and returns a Promise for the eventual result.
 
-**Behavior:** if `callback` throws synchronously before invoking the completion callback, the Promise rejects with the thrown error. Only the first invocation of the completion callback is honored — later invocations are ignored, preventing double settlement.
+**Behavior:** if `callback` throws synchronously before invoking the completion callback, the Promise rejects with the thrown error. Only the first invocation of the completion callback is honored - later invocations are ignored, preventing double settlement.
 
 **Multiple return values:** every value passed after `err` to the completion callback is preserved as the fulfillment values.
 
@@ -219,8 +219,8 @@ readFileAsync('data.json')
 **Signature:** `promise.defer(callback: (...any) -> ...any, ...: any) -> Promise`
 
 **Parameters:**
-- `callback` — run on the next deferred scheduling point via `task.defer`, inside a `pcall`.
-- `...` — arguments forwarded to `callback`.
+- `callback` - run on the next deferred scheduling point via `task.defer`, inside a `pcall`.
+- `...` - arguments forwarded to `callback`.
 
 **Returns:** a Promise that fulfills with `callback`'s return values once it runs, or rejects with the error if it throws.
 
@@ -247,8 +247,8 @@ Registers fulfillment and/or rejection handlers and returns a new child Promise.
 **Signature:** `promise:andThen(onFulfill: ((...any) -> ...any)?, onReject: ((...any) -> ...any)?) -> Promise`
 
 **Parameters:**
-- `onFulfill` — called with the fulfillment values if the parent fulfills. Optional; if omitted, fulfillment passes through unchanged.
-- `onReject` — called with the rejection values if the parent rejects. Optional; if omitted, rejection passes through unchanged.
+- `onFulfill` - called with the fulfillment values if the parent fulfills. Optional; if omitted, fulfillment passes through unchanged.
+- `onReject` - called with the rejection values if the parent rejects. Optional; if omitted, rejection passes through unchanged.
 
 **Returns:** a child Promise that settles based on the return value of whichever handler ran (or passes the parent's outcome through if the relevant handler was omitted).
 
@@ -307,7 +307,7 @@ end)
 **Signature:** `promise:tap(callback: (...any) -> ...any) -> Promise`
 
 **Parameters:**
-- `callback` — called with the fulfillment values if the parent fulfills. Only runs on fulfillment, never on rejection.
+- `callback` - called with the fulfillment values if the parent fulfills. Only runs on fulfillment, never on rejection.
 
 **Returns:** a child Promise that fulfills with the *same* values the parent fulfilled with, once `callback` (and anything it returns) has settled.
 
@@ -441,13 +441,13 @@ Waits for every Promise in a list to fulfill, or rejects as soon as any one reje
 **Signature:** `promise.all(list: {any}) -> Promise`
 
 **Parameters:**
-- `list` — an array of Promises or plain values (plain values are treated as already-fulfilled).
+- `list` - an array of Promises or plain values (plain values are treated as already-fulfilled).
 
 **Returns:** a Promise that fulfills with an array of packed result tuples (one per input, `results[i]` holds all values that input fulfilled with, index-aligned with `list`), or rejects with the first rejection reason encountered.
 
 **Behavior:** an empty list resolves immediately with an empty array.
 
-**Cancellation behavior:** as soon as one input rejects, or the returned Promise is cancelled, every other still-pending input is cancelled (subject to consumer-aware cancellation — a shared input with other consumers elsewhere is only released, not force-cancelled, unless that was its last consumer).
+**Cancellation behavior:** as soon as one input rejects, or the returned Promise is cancelled, every other still-pending input is cancelled (subject to consumer-aware cancellation - a shared input with other consumers elsewhere is only released, not force-cancelled, unless that was its last consumer).
 
 ```lua
 promise.all({promise.resolve(1), promise.resolve(2)}):andThen(function(results)
@@ -500,8 +500,8 @@ Resolves as soon as any one input fulfills; rejects only if every input rejects.
 **Signature:** `promise.any(list: {any}) -> Promise`
 
 **Returns:**
-- On success: fulfills directly with the winning input's raw fulfillment values — multiple return values preserved as-is, *not* wrapped in a table, as if you had `andThen`'d that one input yourself.
-- On failure: rejects with a single value — an array index-aligned with the original `list` (`errors[i]` corresponds to `list[i]`), where each entry is a packed tuple of that input's rejection values (so an individual reason is `errors[i][1]`, not `errors[i]` itself). This only happens once *every* input has rejected, so by the time it's delivered the array has one entry per input, none missing.
+- On success: fulfills directly with the winning input's raw fulfillment values - multiple return values preserved as-is, *not* wrapped in a table, as if you had `andThen`'d that one input yourself.
+- On failure: rejects with a single value - an array index-aligned with the original `list` (`errors[i]` corresponds to `list[i]`), where each entry is a packed tuple of that input's rejection values (so an individual reason is `errors[i][1]`, not `errors[i]` itself). This only happens once *every* input has rejected, so by the time it's delivered the array has one entry per input, none missing.
 - Rejects immediately, before subscribing to anything, if `list` is empty.
 
 **Cancellation behavior:** once a winner is found, or the returned Promise is cancelled, remaining pending inputs are cancelled (consumer-aware, same as `all`).
@@ -514,17 +514,17 @@ promise.any({promise.reject('a'), promise.resolve('b')}):andThen(print)
 
 ### `promise.some`
 
-*(New)* Resolves once a specified number of inputs have fulfilled; rejects only once reaching that number becomes mathematically impossible. A generalization of `any` — `any` is comparable to `some(list, 1)`, except `any` forwards its winner's raw values directly, while `some` always wraps entries in packed tuples (see the return shapes below, and `any`'s shapes above — they are not identical).
+*(New)* Resolves once a specified number of inputs have fulfilled; rejects only once reaching that number becomes mathematically impossible. A generalization of `any` - `any` is comparable to `some(list, 1)`, except `any` forwards its winner's raw values directly, while `some` always wraps entries in packed tuples (see the return shapes below, and `any`'s shapes above - they are not identical).
 
 **Signature:** `promise.some(list: {any}, count: number) -> Promise`
 
 **Parameters:**
-- `list` — an array of Promises or plain values.
-- `count` — how many fulfillments to wait for. Must be `>= 1`.
+- `list` - an array of Promises or plain values.
+- `count` - how many fulfillments to wait for. Must be `>= 1`.
 
 **Returns:**
-- On success: fulfills with a single value — an array of length `count`, built in the order inputs actually fulfilled (*not* index-aligned with `list`, unlike `promise.all`). Each entry is a packed tuple of that input's fulfillment values (an individual value is `results[i][1]`, not `results[i]` itself).
-- On failure: rejects with a single value — an array built in the order rejections arrived (again, not index-aligned with `list`), where each entry is a packed tuple of that input's rejection values. This array only contains the rejections collected up to the moment `count` fulfillments became unreachable; inputs still pending at that moment are cancelled instead of being waited on, so the array's length is `total - count + 1`, not necessarily `#list`.
+- On success: fulfills with a single value - an array of length `count`, built in the order inputs actually fulfilled (*not* index-aligned with `list`, unlike `promise.all`). Each entry is a packed tuple of that input's fulfillment values (an individual value is `results[i][1]`, not `results[i]` itself).
+- On failure: rejects with a single value - an array built in the order rejections arrived (again, not index-aligned with `list`), where each entry is a packed tuple of that input's rejection values. This array only contains the rejections collected up to the moment `count` fulfillments became unreachable; inputs still pending at that moment are cancelled instead of being waited on, so the array's length is `total - count + 1`, not necessarily `#list`.
 - Rejects immediately, without subscribing to any input, if `count` is greater than `#list`.
 
 **Cancellation behavior:** once enough inputs fulfill (or too many reject), or the returned Promise is cancelled, every other still-pending input is cancelled (consumer-aware, same as `all`).
@@ -546,12 +546,12 @@ end)
 **Signature:** `promise.map(list: {any}, mapper: (value: any, index: number) -> any) -> Promise`
 
 **Parameters:**
-- `list` — an array of Promises or plain values.
-- `mapper` — called with each input's first fulfillment value and its index once that input fulfills. Run inside `pcall`.
+- `list` - an array of Promises or plain values.
+- `mapper` - called with each input's first fulfillment value and its index once that input fulfills. Run inside `pcall`.
 
 **Returns:** a Promise that fulfills with an array of `mapper`'s return values, index-aligned with `list`. Rejects with `mapper`'s thrown error if it throws, or with the original reason if an input rejects.
 
-**Behavior:** an empty list resolves immediately with an empty array. All inputs are awaited concurrently, not sequentially — use `promise.each` if strict ordering between iterations is required.
+**Behavior:** an empty list resolves immediately with an empty array. All inputs are awaited concurrently, not sequentially - use `promise.each` if strict ordering between iterations is required.
 
 **Cancellation behavior:** as soon as one input rejects, `mapper` throws, or the returned Promise is cancelled, every other still-pending input is cancelled (consumer-aware, same as `all`).
 
@@ -572,8 +572,8 @@ end)
 **Signature:** `promise.filter(list: {any}, predicate: (value: any, index: number) -> boolean) -> Promise`
 
 **Parameters:**
-- `list` — an array of Promises or plain values.
-- `predicate` — called with each input's first fulfillment value and its index once that input fulfills. Its return value is coerced to a boolean.
+- `list` - an array of Promises or plain values.
+- `predicate` - called with each input's first fulfillment value and its index once that input fulfills. Its return value is coerced to a boolean.
 
 **Returns:** a Promise that fulfills with an array containing only the original values for which `predicate` returned a truthy value, in their original `list` order. Rejects if any input rejects or `predicate` throws.
 
@@ -596,8 +596,8 @@ end)
 **Signature:** `promise.each(list: {any}, iterator: (value: any, index: number) -> any) -> Promise`
 
 **Parameters:**
-- `list` — an array of Promises or plain values.
-- `iterator` — called with each input's first fulfillment value and its index, in order, only after the previous input's iterator call has completed. Run inside `pcall`.
+- `list` - an array of Promises or plain values.
+- `iterator` - called with each input's first fulfillment value and its index, in order, only after the previous input's iterator call has completed. Run inside `pcall`.
 
 **Returns:** a Promise that fulfills with an array of `iterator`'s return values once every input has been processed, index-aligned with `list`. Rejects immediately (without processing further items) if `iterator` throws or an input rejects.
 
@@ -639,8 +639,8 @@ Races a Promise against a timer, rejecting if the timer wins.
 **Signature:** `promise:timeout(seconds: number, reason: any?) -> Promise`
 
 **Parameters:**
-- `seconds` — how long to wait before timing out.
-- `reason` — optional rejection reason to use on timeout; defaults to `'promise timed out'`.
+- `seconds` - how long to wait before timing out.
+- `reason` - optional rejection reason to use on timeout; defaults to `'promise timed out'`.
 
 **Returns:** a Promise that mirrors the original Promise's outcome if it settles first, or rejects with `reason` if the timer elapses first.
 
@@ -659,13 +659,13 @@ Repeatedly calls a function until it succeeds or a maximum number of attempts is
 **Signature:** `promise.retry(fn: (...any) -> ...any, attempts: number, waitSeconds: number?) -> Promise`
 
 **Parameters:**
-- `fn` — called with no arguments on each attempt, inside `pcall`.
-- `attempts` — maximum number of attempts. Must be `>= 1`, or the Promise rejects immediately without calling `fn`.
-- `waitSeconds` — optional delay between attempts (via `promise.delay`); defaults to `0`.
+- `fn` - called with no arguments on each attempt, inside `pcall`.
+- `attempts` - maximum number of attempts. Must be `>= 1`, or the Promise rejects immediately without calling `fn`.
+- `waitSeconds` - optional delay between attempts (via `promise.delay`); defaults to `0`.
 
 **Returns:** a Promise that fulfills with `fn`'s outcome on the first attempt that does not throw synchronously, or rejects with the last synchronous error once `attempts` is exhausted.
 
-**Synchronous functions vs. functions that return a Promise:** `retry` only retries on a *synchronous* error thrown by `fn` — that's the only thing `pcall(fn)` can observe. `fn` is allowed to return a Promise (or thenable) instead of a plain value; when it does, `retry` assimilates it exactly the way `resolve` does anywhere else in this library. The important consequence is that this assimilation happens on the *first* attempt that doesn't throw, and it settles the whole `retry` call directly: if the Promise `fn` returned goes on to reject, that rejection becomes the final outcome of `retry` immediately, without scheduling another attempt. So `retry` is only useful for retrying failures `fn` reports by throwing (synchronously) — it does not inspect or retry based on the eventual rejection of a Promise `fn` hands back.
+**Synchronous functions vs. functions that return a Promise:** `retry` only retries on a *synchronous* error thrown by `fn` - that's the only thing `pcall(fn)` can observe. `fn` is allowed to return a Promise (or thenable) instead of a plain value; when it does, `retry` assimilates it exactly the way `resolve` does anywhere else in this library. The important consequence is that this assimilation happens on the *first* attempt that doesn't throw, and it settles the whole `retry` call directly: if the Promise `fn` returned goes on to reject, that rejection becomes the final outcome of `retry` immediately, without scheduling another attempt. So `retry` is only useful for retrying failures `fn` reports by throwing (synchronously) - it does not inspect or retry based on the eventual rejection of a Promise `fn` hands back.
 
 **Multiple return values:** all values returned by a successful (non-throwing) `fn` call are preserved.
 
@@ -686,12 +686,12 @@ Wraps a Roblox `RBXScriptSignal` (or any object with a compatible `Connect` meth
 **Signature:** `promise.fromEvent(signal: any, predicate: ((...any) -> boolean)?) -> Promise`
 
 **Parameters:**
-- `signal` — any object exposing `:Connect(callback)`.
-- `predicate` — optional filter; when the signal fires, the connection is only consumed (and the Promise fulfilled) if `predicate(...)` returns a truthy value. If falsy, the connection stays alive and waits for the next fire.
+- `signal` - any object exposing `:Connect(callback)`.
+- `predicate` - optional filter; when the signal fires, the connection is only consumed (and the Promise fulfilled) if `predicate(...)` returns a truthy value. If falsy, the connection stays alive and waits for the next fire.
 
 **Returns:** a Promise that fulfills with the arguments passed to the signal the first time it fires (and passes `predicate`, if given). Rejects immediately if `signal:Connect` itself throws.
 
-**If `predicate` throws:** `predicate` is called directly inside the signal's connection callback and is *not* wrapped in `pcall` by this library (the `pcall` in the implementation only guards the initial `signal:Connect(...)` call, not each firing). If `predicate` throws when the signal fires, the error is not caught here — it propagates out of the connection callback the same way any uncaught error in a signal handler would, and does **not** reject the Promise. The Promise is left pending (with the connection still alive) unless something else cancels it. Write `predicate` so it does not throw, or wrap its own logic in `pcall`, if you need rejections on bad input.
+**If `predicate` throws:** `predicate` is called directly inside the signal's connection callback and is *not* wrapped in `pcall` by this library (the `pcall` in the implementation only guards the initial `signal:Connect(...)` call, not each firing). If `predicate` throws when the signal fires, the error is not caught here - it propagates out of the connection callback the same way any uncaught error in a signal handler would, and does **not** reject the Promise. The Promise is left pending (with the connection still alive) unless something else cancels it. Write `predicate` so it does not throw, or wrap its own logic in `pcall`, if you need rejections on bad input.
 
 **Cancellation behavior:** cancelling the Promise disconnects the underlying connection. Disconnecting twice never errors.
 
