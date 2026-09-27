@@ -773,4 +773,331 @@ function promise.fromEvent(signal: any, predicate: ((...any) -> boolean)?): Prom
 	end)
 end
 
+function promise.try(callback: (...any) -> ...any, ...: any): Promise
+	local args = table.pack(...)
+	return promise.new(function(resolve, reject)
+		local packed = table.pack(pcall(callback, table.unpack(args, 1, args.n)))
+		if packed[1] then
+			resolve(table.unpack(packed, 2, packed.n))
+		else
+			reject(packed[2])
+		end
+	end)
+end
+
+function promise.promisify(callback: (...any) -> ...any): (...any) -> Promise
+	return function(...: any): Promise
+		local args = table.pack(...)
+		return promise.new(function(resolve, reject)
+			local settled = false
+
+			local function handler(err: any, ...: any)
+				if settled then
+					return
+				end
+
+				settled = true
+				if err ~= nil then
+					reject(err)
+				else
+					resolve(...)
+				end
+			end
+
+			args.n += 1
+			args[args.n] = handler
+
+			local ok, err = pcall(callback, table.unpack(args, 1, args.n))
+			if not ok and not settled then
+				settled = true
+				reject(err)
+			end
+		end)
+	end
+end
+
+function promise.defer(callback: (...any) -> ...any, ...: any): Promise
+	local args = table.pack(...)
+	return promise.new(function(resolve, reject, onCancel)
+		local thread = task.defer(function()
+			local packed = table.pack(pcall(callback, table.unpack(args, 1, args.n)))
+			if packed[1] then
+				resolve(table.unpack(packed, 2, packed.n))
+			else
+				reject(packed[2])
+			end
+		end)
+
+		onCancel(function()
+			task.cancel(thread)
+		end)
+	end)
+end
+
+function promise.tap(self: Promise, callback: (...any) -> ...any): Promise
+	return self:andThen(function(...)
+		local passthrough = table.pack(...)
+		local result = callback(...)
+		if promise.is(result) or isThenable(result) then
+			return toPromise(result):andThen(function()
+				return table.unpack(passthrough, 1, passthrough.n)
+			end)
+		end
+
+		return table.unpack(passthrough, 1, passthrough.n)
+	end)
+end
+
+function promise.map(list: {any}, mapper: (value: any, index: number) -> any): Promise
+	if typeof(list) ~= 'table' then
+		error('promise.map expects an array', 0)
+	end
+
+	return promise.new(function(resolve, reject, onCancel)
+		local total = #list
+		if total == 0 then
+			resolve({})
+			return
+		end
+
+		local results = table.create(total)
+		local subscriptions = table.create(total)
+		local remaining = total
+		local done = false
+		local registering = true
+		local deferredReject: {any}?
+
+		local function releaseAll()
+			for index = 1, total do
+				local subscription = subscriptions[index]
+				if subscription then
+					subscription:cancel()
+				end
+			end
+		end
+
+		onCancel(function()
+			done = true
+			releaseAll()
+		end)
+
+		for index, raw in list do
+			local item = toPromise(raw)
+			subscriptions[index] = item:andThen(function(value)
+				if done then
+					return
+				end
+
+				local packed = table.pack(pcall(mapper, value, index))
+				if not packed[1] then
+					done = true
+					if registering then
+						deferredReject = table.pack(packed[2])
+					else
+						releaseAll()
+						reject(packed[2])
+					end
+					return
+				end
+
+				results[index] = packed[2]
+				remaining -= 1
+				if remaining == 0 then
+					done = true
+					if not registering then
+						resolve(results)
+					end
+				end
+			end, function(...)
+				if done then
+					return
+				end
+
+				done = true
+				if registering then
+					deferredReject = table.pack(...)
+				else
+					releaseAll()
+					reject(...)
+				end
+			end)
+		end
+
+		registering = false
+		if deferredReject then
+			releaseAll()
+			reject(table.unpack(deferredReject, 1, deferredReject.n))
+		elseif done and remaining == 0 then
+			resolve(results)
+		end
+	end)
+end
+
+function promise.filter(list: {any}, predicate: (value: any, index: number) -> boolean): Promise
+	if typeof(list) ~= 'table' then
+		error('promise.filter expects an array', 0)
+	end
+
+	local values = table.create(#list)
+	return promise.map(list, function(value, index)
+		values[index] = value
+		return predicate(value, index) and true or false
+	end):andThen(function(keep)
+		local filtered = {}
+		for index, shouldKeep in keep do
+			if shouldKeep then
+				table.insert(filtered, values[index])
+			end
+		end
+
+		return filtered
+	end)
+end
+
+function promise.each(list: {any}, iterator: (value: any, index: number) -> any): Promise
+	if typeof(list) ~= 'table' then
+		error('promise.each expects an array', 0)
+	end
+
+	return promise.new(function(resolve, reject, onCancel)
+		local total = #list
+		local results = table.create(total)
+		local cancelled = false
+		local currentSubscription: Promise?
+
+		onCancel(function()
+			cancelled = true
+			if currentSubscription then
+				(currentSubscription :: any):cancel()
+			end
+		end)
+
+		local function step(index: number)
+			if cancelled then
+				return
+			end
+
+			if index > total then
+				resolve(results)
+				return
+			end
+
+			local item = toPromise(list[index])
+			currentSubscription = item:andThen(function(value)
+				if cancelled then
+					return
+				end
+
+				local packed = table.pack(pcall(iterator, value, index))
+				if not packed[1] then
+					reject(packed[2])
+					return
+				end
+
+				results[index] = packed[2]
+				step(index + 1)
+			end, function(...)
+				if cancelled then
+					return
+				end
+
+				reject(...)
+			end)
+		end
+
+		step(1)
+	end)
+end
+
+function promise.some(list: {any}, count: number): Promise
+	if typeof(list) ~= 'table' then
+		error('promise.some expects an array of promises', 0)
+	end
+
+	if typeof(count) ~= 'number' or count <= 0 then
+		error('promise.some requires count >= 1', 0)
+	end
+
+	return promise.new(function(resolve, reject, onCancel)
+		local total = #list
+		if count > total then
+			reject('promise.some requested more results than the list contains')
+			return
+		end
+
+		local fulfilled = {}
+		local errors = {}
+		local subscriptions = table.create(total)
+		local fulfilledCount = 0
+		local rejectedCount = 0
+		local done = false
+		local registering = true
+		local deferredSettle: (() -> ())?
+
+		local function releaseAll()
+			for index = 1, total do
+				local subscription = subscriptions[index]
+				if subscription then
+					subscription:cancel()
+				end
+			end
+		end
+
+		onCancel(function()
+			done = true
+			releaseAll()
+		end)
+
+		for index, raw in list do
+			local item = toPromise(raw)
+			subscriptions[index] = item:andThen(function(...)
+				if done then
+					return
+				end
+
+				fulfilledCount += 1
+				table.insert(fulfilled, table.pack(...))
+				if fulfilledCount >= count then
+					done = true
+					local settleFn = function()
+						releaseAll()
+						resolve(fulfilled)
+					end
+
+					if registering then
+						deferredSettle = settleFn
+					else
+						settleFn()
+					end
+				end
+			end, function(...)
+				if done then
+					return
+				end
+
+				rejectedCount += 1
+				table.insert(errors, table.pack(...))
+				if total - rejectedCount < count then
+					done = true
+					local settleFn = function()
+						releaseAll()
+						reject(errors)
+					end
+
+					if registering then
+						deferredSettle = settleFn
+					else
+						settleFn()
+					end
+				end
+			end)
+		end
+
+		registering = false
+		if deferredSettle then
+			deferredSettle()
+		end
+	end)
+end
+
 return promise
