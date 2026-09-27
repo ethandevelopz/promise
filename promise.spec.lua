@@ -237,6 +237,382 @@ test('retry stops scheduling new attempts once cancelled between failure and del
 	check(calls == snapshot, 'no further attempts should start after cancellation')
 end)
 
+test('try resolves with the callback result', function()
+	local p = promise.try(function(a, b)
+		return a + b
+	end, 2, 3)
+	local ok, value = p:await()
+	check(ok and value == 5, 'expected try to resolve with 5')
+end)
+
+test('try converts a synchronous error into a rejection', function()
+	local p = promise.try(function()
+		error('boom', 0)
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'boom', 'expected try to reject with boom')
+end)
+
+test('try preserves multiple return values', function()
+	local p = promise.try(function()
+		return 1, 2, 3
+	end)
+	local ok, a, b, c = p:await()
+	check(ok and a == 1 and b == 2 and c == 3, 'expected try to preserve 1,2,3')
+end)
+
+test('try assimilates a promise returned by the callback', function()
+	local p = promise.try(function()
+		return promise.resolve('nested')
+	end)
+	local ok, value = p:await()
+	check(ok and value == 'nested', 'expected try to assimilate the returned promise')
+end)
+
+test('try assimilates a thenable returned by the callback', function()
+	local p = promise.try(function()
+		return function(resolve)
+			resolve('thenable')
+		end
+	end)
+	local ok, value = p:await()
+	check(ok and value == 'thenable', 'expected try to assimilate the returned thenable')
+end)
+
+test('try can be cancelled like any other promise', function()
+	local p = promise.try(function()
+		return promise.new(function() end)
+	end)
+	p:cancel()
+	check(p:isCancelled(), 'expected try promise to be cancellable')
+end)
+
+test('promisify resolves through a callback-style function', function()
+	local function readAsync(value, callback)
+		callback(nil, value * 2)
+	end
+	local promisified = promise.promisify(readAsync)
+	local ok, value = promisified(21):await()
+	check(ok and value == 42, 'expected promisified success')
+end)
+
+test('promisify rejects when the callback reports an error', function()
+	local function readAsync(callback)
+		callback('failure')
+	end
+	local promisified = promise.promisify(readAsync)
+	local ok, reason = promisified():await()
+	check(not ok and reason == 'failure', 'expected promisified rejection')
+end)
+
+test('promisify converts a synchronous throw into a rejection', function()
+	local function readAsync()
+		error('sync failure', 0)
+	end
+	local promisified = promise.promisify(readAsync)
+	local ok, reason = promisified():await()
+	check(not ok and reason == 'sync failure', 'expected promisified to catch synchronous errors')
+end)
+
+test('promisify preserves multiple return values', function()
+	local function readAsync(callback)
+		callback(nil, 1, 2, 3)
+	end
+	local promisified = promise.promisify(readAsync)
+	local ok, a, b, c = promisified():await()
+	check(ok and a == 1 and b == 2 and c == 3, 'expected promisified to preserve 1,2,3')
+end)
+
+test('promisify only honors the first callback invocation', function()
+	local function readAsync(callback)
+		callback(nil, 'first')
+		callback(nil, 'second')
+		callback('third')
+	end
+	local promisified = promise.promisify(readAsync)
+	local ok, value = promisified():await()
+	check(ok and value == 'first', 'expected only the first callback invocation to settle')
+end)
+
+test('promisify returns a cancellable pending promise when the callback never responds', function()
+	local function readAsync(_callback) end
+	local promisified = promise.promisify(readAsync)
+	local p = promisified()
+	check(p:isPending(), 'expected the promisified call to still be pending')
+	p:cancel()
+	check(p:isCancelled(), 'expected the promisified call to be cancellable')
+end)
+
+test('defer schedules the callback and resolves with its result', function()
+	local ran = false
+	local p = promise.defer(function()
+		ran = true
+		return 'deferred'
+	end)
+	check(not ran, 'callback should not run synchronously')
+	local ok, value = p:await()
+	check(ran and ok and value == 'deferred', 'expected defer to run later and resolve')
+end)
+
+test('defer converts a callback error into a rejection', function()
+	local p = promise.defer(function()
+		error('deferred failure', 0)
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'deferred failure', 'expected defer to reject')
+end)
+
+test('defer forwards arguments and preserves multiple return values', function()
+	local p = promise.defer(function(a, b)
+		return a, b, a + b
+	end, 4, 5)
+	local ok, a, b, sum = p:await()
+	check(ok and a == 4 and b == 5 and sum == 9, 'expected defer to forward args and preserve returns')
+end)
+
+test('defer assimilates a promise returned by the callback', function()
+	local p = promise.defer(function()
+		return promise.resolve('nested defer')
+	end)
+	local ok, value = p:await()
+	check(ok and value == 'nested defer', 'expected defer to assimilate the returned promise')
+end)
+
+test('cancelling a defer before it runs stops the callback', function()
+	local ran = false
+	local p = promise.defer(function()
+		ran = true
+	end)
+	p:cancel()
+	task.wait()
+	check(not ran, 'expected the deferred callback to never run once cancelled')
+end)
+
+test('tap runs a side effect and passes the original value through', function()
+	local seen
+	local p = promise.resolve(1, 2, 3):tap(function(a, b, c)
+		seen = {a, b, c}
+	end)
+	local ok, a, b, c = p:await()
+	check(ok and a == 1 and b == 2 and c == 3, 'expected tap to preserve the original values')
+	check(seen[1] == 1 and seen[2] == 2 and seen[3] == 3, 'expected tap callback to observe the values')
+end)
+
+test('tap propagates an error thrown by the side effect', function()
+	local p = promise.resolve('value'):tap(function()
+		error('tap failed', 0)
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'tap failed', 'expected tap error to reject')
+end)
+
+test('tap does not run when the promise rejects', function()
+	local ran = false
+	local p = promise.reject('nope'):tap(function()
+		ran = true
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'nope' and not ran, 'expected tap to skip on rejection')
+end)
+
+test('tap waits for a promise returned by the side effect', function()
+	local finished = false
+	local p = promise.resolve('value'):tap(function()
+		return promise.delay(0.05):andThen(function()
+			finished = true
+		end)
+	end)
+	local ok, value = p:await()
+	check(ok and value == 'value' and finished, 'expected tap to wait for the returned promise')
+end)
+
+test('map transforms each value and preserves order', function()
+	local p = promise.map({1, 2, 3}, function(value)
+		return value * 2
+	end)
+	local ok, results = p:await()
+	check(ok and results[1] == 2 and results[2] == 4 and results[3] == 6, 'expected mapped results in order')
+end)
+
+test('map resolves list items that are themselves promises', function()
+	local slow = promise.delay(0.02):andThen(function()
+		return 2
+	end)
+	local p = promise.map({promise.resolve(1), slow}, function(value)
+		return value + 10
+	end)
+	local ok, results = p:await()
+	check(ok and results[1] == 11 and results[2] == 12, 'expected map to await promise items before mapping')
+end)
+
+test('map rejects and cancels remaining items when the mapper throws', function()
+	local never = promise.new(function() end)
+	local p = promise.map({1, never}, function(value)
+		if value == 1 then
+			error('mapper failed', 0)
+		end
+		return value
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'mapper failed', 'expected map to reject on mapper error')
+	task.wait()
+	check(never:isCancelled(), 'expected the unresolved sibling to be cancelled')
+end)
+
+test('map rejects and cancels remaining items when a source item rejects', function()
+	local never = promise.new(function() end)
+	local p = promise.map({promise.reject('source failed'), never}, function(value)
+		return value
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'source failed', 'expected map to reject on source rejection')
+	task.wait()
+	check(never:isCancelled(), 'expected the unresolved sibling to be cancelled')
+end)
+
+test('cancelling a map promise cancels its remaining subscriptions', function()
+	local never = promise.new(function() end)
+	local p = promise.map({never}, function(value)
+		return value
+	end)
+	p:cancel()
+	task.wait()
+	check(never:isCancelled(), 'expected cancelling map to cancel its source items')
+end)
+
+test('map resolves immediately with an empty list', function()
+	local ok, results = promise.map({}, function(value)
+		return value
+	end):await()
+	check(ok and #results == 0, 'expected map of an empty list to resolve with an empty array')
+end)
+
+test('filter keeps only values that pass the predicate', function()
+	local p = promise.filter({1, 2, 3, 4, 5}, function(value)
+		return value % 2 == 0
+	end)
+	local ok, results = p:await()
+	check(ok and #results == 2 and results[1] == 2 and results[2] == 4, 'expected filter to keep even values')
+end)
+
+test('filter awaits promise items before filtering', function()
+	local p = promise.filter({promise.resolve(1), promise.resolve(2), promise.resolve(3)}, function(value)
+		return value > 1
+	end)
+	local ok, results = p:await()
+	check(ok and #results == 2 and results[1] == 2 and results[2] == 3, 'expected filter to await promise items')
+end)
+
+test('filter propagates rejection from a source item', function()
+	local p = promise.filter({promise.reject('filter source failed')}, function()
+		return true
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'filter source failed', 'expected filter to reject on source rejection')
+end)
+
+test('each runs sequentially and collects results in order', function()
+	local order = {}
+	local p = promise.each({1, 2, 3}, function(value)
+		table.insert(order, value)
+		return value * 10
+	end)
+	local ok, results = p:await()
+	check(ok and results[1] == 10 and results[2] == 20 and results[3] == 30, 'expected each to collect results in order')
+	check(order[1] == 1 and order[2] == 2 and order[3] == 3, 'expected each to run sequentially in order')
+end)
+
+test('each waits for a pending item before moving to the next', function()
+	local slowDone = false
+	local sawFastBeforeSlowFinished = false
+	local slow = promise.delay(0.05)
+	local p = promise.each({slow, promise.resolve('fast')}, function(value, index)
+		if index == 1 then
+			slowDone = true
+		elseif index == 2 and not slowDone then
+			sawFastBeforeSlowFinished = true
+		end
+	end)
+	p:await()
+	check(not sawFastBeforeSlowFinished, 'expected each to process items strictly in order')
+end)
+
+test('each rejects and stops when the iterator throws', function()
+	local ran = {}
+	local p = promise.each({1, 2, 3}, function(value)
+		table.insert(ran, value)
+		if value == 2 then
+			error('each failed', 0)
+		end
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'each failed', 'expected each to reject on iterator error')
+	check(#ran == 2, 'expected each to stop after the failing item')
+end)
+
+test('each rejects when a source item rejects', function()
+	local ran = {}
+	local p = promise.each({promise.resolve(1), promise.reject('each source failed'), promise.resolve(3)}, function(value)
+		table.insert(ran, value)
+	end)
+	local ok, reason = p:await()
+	check(not ok and reason == 'each source failed', 'expected each to reject on source rejection')
+	check(#ran == 1, 'expected each to stop before the rejected item runs')
+end)
+
+test('cancelling each cancels the item currently in flight', function()
+	local current = promise.new(function() end)
+	local p = promise.each({current}, function() end)
+	task.wait()
+	p:cancel()
+	task.wait()
+	check(current:isCancelled(), 'expected each to cancel the in-flight item')
+end)
+
+test('some resolves once enough items fulfill', function()
+	local never = promise.new(function() end)
+	local p = promise.some({promise.resolve(1), promise.resolve(2), never}, 2)
+	local ok, results = p:await()
+	check(ok and #results == 2, 'expected some to resolve with 2 results')
+	task.wait()
+	check(never:isCancelled(), 'expected the unneeded sibling to be cancelled')
+end)
+
+test('some rejects once enough items reject to make the target unreachable', function()
+	local p = promise.some({promise.reject('a'), promise.reject('b'), promise.resolve('c')}, 2)
+	local ok, errors = p:await()
+	check(not ok and #errors == 2, 'expected some to reject once the target becomes unreachable')
+end)
+
+test('some rejects immediately when count exceeds the list size', function()
+	local ok, reason = promise.some({promise.resolve(1)}, 2):await()
+	check(not ok and reason == 'promise.some requested more results than the list contains', 'expected some to reject on an impossible count')
+end)
+
+test('cancelling some cancels its remaining subscriptions', function()
+	local never = promise.new(function() end)
+	local p = promise.some({never}, 1)
+	p:cancel()
+	task.wait()
+	check(never:isCancelled(), 'expected cancelling some to cancel its source items')
+end)
+
+test('try, defer and promisify interoperate with promise.all', function()
+	local combined = promise.all({
+		promise.try(function()
+			return 1
+		end),
+		promise.defer(function()
+			return 2
+		end),
+		promise.promisify(function(callback)
+			callback(nil, 3)
+		end)(),
+	})
+	local ok, results = combined:await()
+	check(ok and results[1][1] == 1 and results[2][1] == 2 and results[3][1] == 3, 'expected try/defer/promisify to interoperate with promise.all')
+end)
+
 print(string.format('%d passed, %d failed', passed, failed))
 if failed > 0 then
 	error('failing tests: ' .. table.concat(failedNames, ', '), 0)
